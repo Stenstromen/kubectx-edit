@@ -142,6 +142,8 @@ impl App {
                             clusters: self.config.clusters.clone(),
                             users: self.config.users.clone(),
                             contexts: self.config.contexts.clone(),
+                            current_context: self.config.current_context.clone(),
+                            preferences: self.config.preferences.clone(),
                         };
                         let yaml_content = serde_yaml
                             ::to_string(&updated_config)
@@ -192,6 +194,8 @@ impl App {
                         clusters: self.config.clusters.clone(),
                         users: self.config.users.clone(),
                         contexts: self.config.contexts.clone(),
+                        current_context: self.config.current_context.clone(),
+                        preferences: self.config.preferences.clone(),
                     };
                     let yaml_content = serde_yaml
                         ::to_string(&updated_config)

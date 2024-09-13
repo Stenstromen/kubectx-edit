@@ -1,10 +1,15 @@
 use serde::{Deserialize, Serialize};
+use serde_yaml::Value;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub clusters: Vec<Cluster>,
     pub users: Vec<User>,
     pub contexts: Vec<Context>,
+    #[serde(rename = "current-context", skip_serializing_if = "Option::is_none")]
+    pub current_context: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferences: Option<Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -16,6 +21,8 @@ pub struct Cluster {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClusterDetails {
     pub server: String,
+    #[serde(rename = "certificate-authority-data", skip_serializing_if = "Option::is_none")]
+    pub certificate_authority_data: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
