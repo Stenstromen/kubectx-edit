@@ -1,13 +1,12 @@
+use crate::app::App;
 use ratatui::{
-    backend::Backend,
-    layout::{Layout, Constraint, Direction, Rect, Alignment},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
-    widgets::{Block, Borders, List, ListItem, Clear, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
     Frame,
 };
-use crate::app::App;
 
-pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
     let clusters_count = app.config.clusters.len() as u16;
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -17,11 +16,14 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
                 Constraint::Min(0),
                 Constraint::Length(clusters_count),
                 Constraint::Length(1),
-            ].as_ref()
+            ]
+            .as_ref(),
         )
         .split(f.size());
 
-    let items: Vec<ListItem> = app.config.clusters
+    let items: Vec<ListItem> = app
+        .config
+        .clusters
         .iter()
         .map(|cluster| ListItem::new(cluster.name.clone()))
         .collect();
@@ -37,9 +39,14 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     if app.show_menu {
         let menu_items = vec!["Edit", "Delete"];
-        let menu = List::new(menu_items.into_iter().map(ListItem::new).collect::<Vec<_>>())
-            .block(Block::default().borders(Borders::ALL))
-            .highlight_style(Style::default().bg(Color::LightGreen));
+        let menu = List::new(
+            menu_items
+                .into_iter()
+                .map(ListItem::new)
+                .collect::<Vec<_>>(),
+        )
+        .block(Block::default().borders(Borders::ALL))
+        .highlight_style(Style::default().bg(Color::LightGreen));
 
         let area = centered_rect(30, 30, f.size());
         f.render_widget(Clear, area);
