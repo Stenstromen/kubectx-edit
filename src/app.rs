@@ -79,7 +79,17 @@ impl App {
                 .iter()
                 .position(|c| c.context.cluster == cluster_name)
             {
+                let context_name = self.config.contexts[context_index].name.clone();
                 self.config.contexts.remove(context_index);
+
+                // If the deleted context was the current context, update it
+                if let Some(current) = &self.config.current_context {
+                    if current == &context_name {
+                        // Set current context to the first available context, or None if none exist
+                        self.config.current_context =
+                            self.config.contexts.first().map(|c| c.name.clone());
+                    }
+                }
             }
 
             // Remove associated user if it's not used by any other context

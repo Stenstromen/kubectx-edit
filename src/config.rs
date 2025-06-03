@@ -1,6 +1,6 @@
-use std::{ fs, env, path::PathBuf, error::Error };
 use crate::types::Config;
 use serde_yaml::Value;
+use std::{env, error::Error, fs, path::PathBuf};
 
 pub fn load_config() -> Result<(Config, PathBuf), Box<dyn Error>> {
     let kubeconfig_path = get_kubeconfig_path();
@@ -25,22 +25,39 @@ pub fn save_config(config: &Config, path: &PathBuf) -> Result<(), Box<dyn Error>
     if let Value::Mapping(ref mut mapping) = existing_yaml {
         mapping.insert(
             Value::String("clusters".to_string()),
-            serde_yaml::to_value(&config.clusters)?
+            serde_yaml::to_value(&config.clusters)?,
         );
-        mapping.insert(Value::String("users".to_string()), serde_yaml::to_value(&config.users)?);
+        mapping.insert(
+            Value::String("users".to_string()),
+            serde_yaml::to_value(&config.users)?,
+        );
         mapping.insert(
             Value::String("contexts".to_string()),
-            serde_yaml::to_value(&config.contexts)?
+            serde_yaml::to_value(&config.contexts)?,
         );
+
+        // Update current-context
+        if let Some(current_context) = &config.current_context {
+            mapping.insert(
+                Value::String("current-context".to_string()),
+                Value::String(current_context.clone()),
+            );
+        } else {
+            // Remove current-context if it's None
+            mapping.remove(&Value::String("current-context".to_string()));
+        }
 
         if !mapping.contains_key("apiVersion") {
             mapping.insert(
                 Value::String("apiVersion".to_string()),
-                Value::String("v1".to_string())
+                Value::String("v1".to_string()),
             );
         }
         if !mapping.contains_key("kind") {
-            mapping.insert(Value::String("kind".to_string()), Value::String("Config".to_string()));
+            mapping.insert(
+                Value::String("kind".to_string()),
+                Value::String("Config".to_string()),
+            );
         }
     }
 
