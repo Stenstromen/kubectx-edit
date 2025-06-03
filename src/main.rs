@@ -1,19 +1,16 @@
 mod app;
-mod ui;
-mod input;
 mod config;
+mod input;
 mod types;
+mod ui;
 
 use app::App;
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
 use crossterm::{
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use std::{io, error::Error};
+use ratatui::{Terminal, backend::CrosstermBackend};
+use std::{error::Error, io};
 
 fn main() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
@@ -22,19 +19,29 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
 
-    let (config, kubeconfig_path) = config::load_config()?;
-    let mut app = App::new(config, kubeconfig_path);
+    match config::load_config() {
+        Ok((config, kubeconfig_path)) => {
+            let mut app = App::new(config, kubeconfig_path);
 
-    loop {
-        if app.needs_redraw {
-            terminal.clear()?;
-            app.needs_redraw = false;
+            loop {
+                if app.needs_redraw {
+                    terminal.clear()?;
+                    app.needs_redraw = false;
+                }
+
+                terminal.draw(|f| ui::draw(f, &mut app))?;
+
+                if input::handle_input(&mut app)? {
+                    break;
+                }
+            }
         }
-
-        terminal.draw(|f| ui::draw(f, &mut app))?;
-
-        if input::handle_input(&mut app)? {
-            break;
+        Err(e) => {
+            // Clean up terminal state before showing error
+            disable_raw_mode()?;
+            stdout.execute(LeaveAlternateScreen)?;
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
         }
     }
 
