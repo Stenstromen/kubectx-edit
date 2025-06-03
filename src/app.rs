@@ -12,8 +12,6 @@ pub struct App {
     pub config: Config,
     pub cluster_list_state: ListState,
     pub selected_cluster: Option<Cluster>,
-    pub show_menu: bool,
-    pub menu_state: ListState,
     pub needs_redraw: bool,
     pub kubeconfig_path: PathBuf,
 }
@@ -24,8 +22,6 @@ impl App {
             config,
             cluster_list_state: ListState::default(),
             selected_cluster: None,
-            show_menu: false,
-            menu_state: ListState::default(),
             needs_redraw: false,
             kubeconfig_path,
         }
@@ -51,11 +47,6 @@ impl App {
         if let Some(i) = self.cluster_list_state.selected() {
             self.selected_cluster = Some(self.config.clusters[i].clone());
         }
-    }
-
-    pub fn toggle_menu(&mut self) {
-        self.show_menu = !self.show_menu;
-        self.menu_state.select(Some(0));
     }
 
     pub fn delete_selected(&mut self) {
@@ -204,8 +195,6 @@ impl App {
             }
         }
         self.save_config().expect("Failed to save config");
-        self.show_menu = false;
-        self.menu_state = ListState::default();
         self.needs_redraw = true;
         Ok(())
     }
@@ -261,23 +250,5 @@ impl App {
 
     pub fn save_config(&self) -> Result<(), Box<dyn std::error::Error>> {
         config::save_config(&self.config, &self.kubeconfig_path)
-    }
-
-    pub fn menu_next(&mut self) {
-        let len = 2;
-        let i = match self.menu_state.selected() {
-            Some(i) => (i + 1) % len,
-            None => 0,
-        };
-        self.menu_state.select(Some(i));
-    }
-
-    pub fn menu_previous(&mut self) {
-        let len = 2;
-        let i = match self.menu_state.selected() {
-            Some(i) => (i + len - 1) % len,
-            None => len - 1,
-        };
-        self.menu_state.select(Some(i));
     }
 }
