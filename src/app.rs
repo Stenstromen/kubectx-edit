@@ -18,13 +18,21 @@ pub struct App {
 
 impl App {
     pub fn new(config: Config, kubeconfig_path: PathBuf) -> Self {
-        Self {
+        let mut app = Self {
             config,
             cluster_list_state: ListState::default(),
             selected_cluster: None,
             needs_redraw: false,
             kubeconfig_path,
+        };
+
+        // Select first item if there are any clusters
+        if !app.config.clusters.is_empty() {
+            app.cluster_list_state.select(Some(0));
+            app.selected_cluster = Some(app.config.clusters[0].clone());
         }
+
+        app
     }
 
     pub fn next(&mut self) {
