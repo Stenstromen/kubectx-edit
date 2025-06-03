@@ -1,9 +1,12 @@
-use crate::types::{ Config, Cluster, TempConfig };
 use crate::config;
+use crate::types::{Cluster, Config, TempConfig};
+use crossterm::{
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen},
+};
 use ratatui::widgets::ListState;
-use std::{ io, env, path::PathBuf, process::Command };
+use std::{env, io, path::PathBuf, process::Command};
 use tempfile::NamedTempFile;
-use crossterm::{ execute, terminal::{ EnterAlternateScreen, LeaveAlternateScreen } };
 
 pub struct App {
     pub config: Config,
@@ -57,8 +60,47 @@ impl App {
 
     pub fn delete_selected(&mut self) {
         if let Some(selected) = self.cluster_list_state.selected() {
+            let cluster_name = self.config.clusters[selected].name.clone();
+
+            // Remove the cluster
             self.config.clusters.remove(selected);
-            self.cluster_list_state.select(Some(selected.saturating_sub(1)));
+
+            // Find and store user information before removing context
+            let user_to_remove = self
+                .config
+                .contexts
+                .iter()
+                .find(|c| c.context.cluster == cluster_name)
+                .map(|c| c.context.user.clone());
+
+            // Remove associated context
+            if let Some(context_index) = self
+                .config
+                .contexts
+                .iter()
+                .position(|c| c.context.cluster == cluster_name)
+            {
+                self.config.contexts.remove(context_index);
+            }
+
+            // Remove associated user if it's not used by any other context
+            if let Some(user_name) = user_to_remove {
+                if !self
+                    .config
+                    .contexts
+                    .iter()
+                    .any(|c| c.context.user == user_name)
+                {
+                    if let Some(user_index) =
+                        self.config.users.iter().position(|u| u.name == user_name)
+                    {
+                        self.config.users.remove(user_index);
+                    }
+                }
+            }
+
+            self.cluster_list_state
+                .select(Some(selected.saturating_sub(1)));
             self.save_config().expect("Failed to save config");
             self.needs_redraw = true;
         }
@@ -69,13 +111,20 @@ impl App {
             let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
             let temp_file = NamedTempFile::new()?;
 
-            let context = self.config.contexts
+            let context = self
+                .config
+                .contexts
                 .iter()
                 .find(|c| &c.name == &cluster.name)
                 .cloned();
             let user = context
                 .as_ref()
-                .and_then(|c| self.config.users.iter().find(|u| &u.name == &c.context.user))
+                .and_then(|c| {
+                    self.config
+                        .users
+                        .iter()
+                        .find(|u| &u.name == &c.context.user)
+                })
                 .cloned();
 
             let temp_config = TempConfig {
@@ -84,8 +133,7 @@ impl App {
                 user,
             };
 
-            serde_yaml
-                ::to_writer(&temp_file, &temp_config)
+            serde_yaml::to_writer(&temp_file, &temp_config)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
             crossterm::terminal::disable_raw_mode()?;
@@ -107,19 +155,21 @@ impl App {
                 let edited_content = std::fs::read_to_string(temp_file.path())?;
                 match serde_yaml::from_str::<TempConfig>(&edited_content) {
                     Ok(edited_config) => {
-                        if
-                            let Some(index) = self.config.clusters
-                                .iter()
-                                .position(|c| c.name == cluster.name)
+                        if let Some(index) = self
+                            .config
+                            .clusters
+                            .iter()
+                            .position(|c| c.name == cluster.name)
                         {
                             self.config.clusters[index] = edited_config.cluster;
                             self.selected_cluster = Some(self.config.clusters[index].clone());
                         }
                         if let Some(context) = edited_config.context {
-                            if
-                                let Some(index) = self.config.contexts
-                                    .iter()
-                                    .position(|c| c.name == context.name)
+                            if let Some(index) = self
+                                .config
+                                .contexts
+                                .iter()
+                                .position(|c| c.name == context.name)
                             {
                                 self.config.contexts[index] = context;
                             } else {
@@ -127,10 +177,8 @@ impl App {
                             }
                         }
                         if let Some(user) = edited_config.user {
-                            if
-                                let Some(index) = self.config.users
-                                    .iter()
-                                    .position(|u| u.name == user.name)
+                            if let Some(index) =
+                                self.config.users.iter().position(|u| u.name == user.name)
                             {
                                 self.config.users[index] = user;
                             } else {
@@ -145,8 +193,7 @@ impl App {
                             current_context: self.config.current_context.clone(),
                             preferences: self.config.preferences.clone(),
                         };
-                        let yaml_content = serde_yaml
-                            ::to_string(&updated_config)
+                        let yaml_content = serde_yaml::to_string(&updated_config)
                             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
                         std::fs::write(&self.kubeconfig_path, yaml_content)?;
                     }
@@ -197,8 +244,7 @@ impl App {
                         current_context: self.config.current_context.clone(),
                         preferences: self.config.preferences.clone(),
                     };
-                    let yaml_content = serde_yaml
-                        ::to_string(&updated_config)
+                    let yaml_content = serde_yaml::to_string(&updated_config)
                         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
                     std::fs::write(&self.kubeconfig_path, yaml_content)?;
                 }
