@@ -1,0 +1,188 @@
+---
+name: KubeCTX-Edit Build and Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            arch: x86_64
+            name: Darwin_x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            arch: arm64
+            name: Darwin_arm64
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            arch: x86_64
+            name: Linux_x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            arch: arm64
+            name: Linux_arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        run: |
+          rustup install stable
+          rustup target add ${{ matrix.target }}
+
+      - name: Build binary
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        run: |
+          tar -czvf kubectx-edit_${{ matrix.name }}.tar.gz -C ./target/${{ matrix.target }}/release kubectx-edit
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubectx-edit_${{ matrix.name }}.tar.gz
+          path: kubectx-edit_${{ matrix.name }}.tar.gz
+
+  checksum:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      VERSIONTAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Generate checksums
+        run: |
+          for file in artifacts/*.tar.gz/*.tar.gz; do
+            sha256sum "$file" | awk '{gsub(/.*\//, "", $2); print $1 "  " $2}' >> kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt
+          done
+
+      - name: Upload checksum file
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt
+          path: kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt
+
+
+  upload-release-assets:
+    needs: [build, checksum]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+      
+      - name: Get release
+        id: get_release
+        uses: bruceadams/get-release@v1.3.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            ./artifacts/kubectx-edit_${{ github.event.release.tag_name }}_checksums.txt/kubectx-edit_${{ github.event.release.tag_name }}_checksums.txt
+            ./artifacts/kubectx-edit_Darwin_x86_64.tar.gz/kubectx-edit_Darwin_x86_64.tar.gz
+            ./artifacts/kubectx-edit_Darwin_arm64.tar.gz/kubectx-edit_Darwin_arm64.tar.gz
+            ./artifacts/kubectx-edit_Linux_x86_64.tar.gz/kubectx-edit_Linux_x86_64.tar.gz
+            ./artifacts/kubectx-edit_Linux_arm64.tar.gz/kubectx-edit_Linux_arm64.tar.gz
+
+  homebrew-tap:
+    needs: [build, checksum, upload-release-assets]
+    runs-on: ubuntu-latest
+    env:
+      VERSIONTAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Checkout homebrew-tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: stenstromen/homebrew-tap
+          token: ${{ secrets.GO_RELEASER_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Download checksum file
+        uses: actions/download-artifact@v4
+        with:
+          name: kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt
+          path: .
+
+      - name: Create Homebrew Formula
+        run: |
+          REPO_NAME="kubectx-edit"
+          REPO_URL="https://github.com/Stenstromen/${REPO_NAME}"
+          FORMULA_PATH="homebrew-tap/Formula/${REPO_NAME}.rb"
+          CHECKSUM_FILE="kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt"
+
+          cat > "${FORMULA_PATH}" << EOF
+          # typed: false
+          # frozen_string_literal: true
+          class KubeCTX-Edit < Formula
+            desc "Small software utility to efficiently manage multiple kubeconfig contexts"
+            homepage "${REPO_URL}"
+            version "${VERSIONTAG}"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${REPO_URL}/releases/download/${VERSIONTAG}/${REPO_NAME}_Darwin_arm64.tar.gz"
+                sha256 "$(grep 'kubectx-edit_Darwin_arm64.tar.gz' $CHECKSUM_FILE | awk '{print $1}')"
+
+                def install
+                  bin.install "${REPO_NAME}"
+                end
+              end
+              if Hardware::CPU.intel?
+                url "${REPO_URL}/releases/download/${VERSIONTAG}/${REPO_NAME}_Darwin_x86_64.tar.gz"
+                sha256 "$(grep 'kubectx-edit_Darwin_x86_64.tar.gz' $CHECKSUM_FILE | awk '{print $1}')"
+
+                def install
+                  bin.install "${REPO_NAME}"
+                end
+
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+                url "${REPO_URL}/releases/download/${VERSIONTAG}/${REPO_NAME}_Linux_arm64.tar.gz"
+                sha256 "$(grep 'kubectx-edit_Linux_arm64.tar.gz' $CHECKSUM_FILE | awk '{print $1}')"
+
+                def install
+                  bin.install "${REPO_NAME}"
+                end
+              end
+              if Hardware::CPU.intel?
+                url "${REPO_URL}/releases/download/${VERSIONTAG}/${REPO_NAME}_Linux_x86_64.tar.gz"
+                sha256 "$(grep 'kubectx-edit_Linux_x86_64.tar.gz' $CHECKSUM_FILE | awk '{print $1}')"
+
+                def install
+                  bin.install "${REPO_NAME}"
+                end
+
+              end
+            end
+          end
+          EOF
+
+      - name: Commit and Push Homebrew Formula
+        run: |
+          cd homebrew-tap
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add Formula/kubectx-edit.rb
+          git commit -m "Update kubectx-edit formula for version $VERSIONTAG"
+          git push
