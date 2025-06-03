@@ -139,7 +139,7 @@ jobs:
           cat > "${FORMULA_PATH}" << EOF
           # typed: false
           # frozen_string_literal: true
-          class KubeCTX-Edit < Formula
+          class KubectxEdit < Formula
             desc "Small software utility to efficiently manage multiple kubeconfig contexts"
             homepage "${REPO_URL}"
             version "${VERSIONTAG}"
