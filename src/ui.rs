@@ -19,7 +19,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             ]
             .as_ref(),
         )
-        .split(f.size());
+        .split(f.area());
 
     let items: Vec<ListItem> = app
         .config
@@ -48,7 +48,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .block(Block::default().borders(Borders::ALL))
         .highlight_style(Style::default().bg(Color::LightGreen));
 
-        let area = centered_rect(30, 30, f.size());
+        let area = centered_rect(30, 30, f.area());
         f.render_widget(Clear, area);
         f.render_stateful_widget(menu, area, &mut app.menu_state);
     }
