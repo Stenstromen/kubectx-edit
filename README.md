@@ -1,5 +1,7 @@
 # KubeCTX-Edit
 
+![KubeCTX-Edit](./logo.webp)
+
 Small software utility to efficiently manage multiple kubeconfig contexts.
 
 Add, Remove and Edit entries in kubeconfig
@@ -10,7 +12,7 @@ Add, Remove and Edit entries in kubeconfig
     - [Download and Run Binary](#download-and-run-binary)
     - [Build from source](#build-from-source)
   - [Build and Run](#build-and-run)
-  - [Kubeconfig in none default location](#kubeconfig-in-none-default-location)
+  - [Kubeconfig in non-default location](#kubeconfig-in-non-default-location)
   - [Editor](#editor)
 
 ## Installation
@@ -35,7 +37,7 @@ cargo build --release --
 ./target/release/kubectx-edit
 ```
 
-## Kubeconfig in none default location
+## Kubeconfig in non-default location
 
 If your kubeconfig is in a non-default location, you can set the `KUBECONFIG` environment variable to the path of your kubeconfig file.
 
