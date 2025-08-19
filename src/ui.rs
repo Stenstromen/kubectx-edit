@@ -1,9 +1,9 @@
 use crate::app::App;
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Style},
     widgets::{Block, Borders, List, ListItem, Paragraph},
-    Frame,
 };
 
 pub fn draw(f: &mut Frame, app: &mut App) {
@@ -34,7 +34,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     f.render_stateful_widget(list, chunks[2], &mut app.cluster_list_state);
 
-    let help_message = Paragraph::new("Enter to Edit, A to Add, D to Delete, Q to quit")
+    let help_message = Paragraph::new("Enter/E to Edit, A to Add, D to Delete, Q to quit")
         .style(Style::default().fg(Color::Gray))
         .alignment(Alignment::Center);
     f.render_widget(help_message, chunks[3]);

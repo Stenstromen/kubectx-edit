@@ -124,7 +124,7 @@ impl App {
                 .config
                 .contexts
                 .iter()
-                .find(|c| &c.name == &cluster.name)
+                .find(|c| c.context.cluster == cluster.name)
                 .cloned();
             let user = context
                 .as_ref()
@@ -164,6 +164,24 @@ impl App {
                 let edited_content = std::fs::read_to_string(temp_file.path())?;
                 match serde_yaml::from_str::<TempConfig>(&edited_content) {
                     Ok(edited_config) => {
+                        // Store original names for finding existing entries
+                        let original_context = self
+                            .config
+                            .contexts
+                            .iter()
+                            .find(|c| c.context.cluster == cluster.name)
+                            .cloned();
+                        let original_user = original_context
+                            .as_ref()
+                            .and_then(|c| {
+                                self.config
+                                    .users
+                                    .iter()
+                                    .find(|u| &u.name == &c.context.user)
+                            })
+                            .cloned();
+
+                        // Update cluster
                         if let Some(index) = self
                             .config
                             .clusters
@@ -173,23 +191,38 @@ impl App {
                             self.config.clusters[index] = edited_config.cluster;
                             self.selected_cluster = Some(self.config.clusters[index].clone());
                         }
+
+                        // Update context - find by original context name, not cluster name
                         if let Some(context) = edited_config.context {
-                            if let Some(index) = self
-                                .config
-                                .contexts
-                                .iter()
-                                .position(|c| c.name == context.name)
-                            {
-                                self.config.contexts[index] = context;
+                            if let Some(orig_context) = original_context {
+                                if let Some(index) = self
+                                    .config
+                                    .contexts
+                                    .iter()
+                                    .position(|c| c.name == orig_context.name)
+                                {
+                                    self.config.contexts[index] = context;
+                                } else {
+                                    self.config.contexts.push(context);
+                                }
                             } else {
                                 self.config.contexts.push(context);
                             }
                         }
+
+                        // Update user - find by original user name
                         if let Some(user) = edited_config.user {
-                            if let Some(index) =
-                                self.config.users.iter().position(|u| u.name == user.name)
-                            {
-                                self.config.users[index] = user;
+                            if let Some(orig_user) = original_user {
+                                if let Some(index) = self
+                                    .config
+                                    .users
+                                    .iter()
+                                    .position(|u| u.name == orig_user.name)
+                                {
+                                    self.config.users[index] = user;
+                                } else {
+                                    self.config.users.push(user);
+                                }
                             } else {
                                 self.config.users.push(user);
                             }
@@ -221,6 +254,33 @@ impl App {
         let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
         let temp_file = NamedTempFile::new()?;
 
+        // Create a template for the user to fill out
+        let template = r#"# Add your new kubeconfig context below
+# Replace the placeholders with your actual values
+
+cluster:
+  name: "new-cluster-name"
+  cluster:
+    server: "https://your-cluster-server:6443"
+    certificate-authority-data: "YOUR_CA_DATA_HERE"
+
+context:
+  name: "new-context-name"
+  context:
+    cluster: "new-cluster-name"
+    user: "new-user-name"
+
+user:
+  name: "new-user-name"
+  user:
+    token: "YOUR_TOKEN_HERE"
+    # OR use certificate-based auth instead:
+    # client-certificate-data: "YOUR_CLIENT_CERT_DATA"
+    # client-key-data: "YOUR_CLIENT_KEY_DATA"
+"#;
+
+        std::fs::write(temp_file.path(), template)?;
+
         crossterm::terminal::disable_raw_mode()?;
         execute!(io::stdout(), LeaveAlternateScreen)?;
 
@@ -238,11 +298,46 @@ impl App {
 
         if status.success() {
             let edited_content = std::fs::read_to_string(temp_file.path())?;
-            match serde_yaml::from_str::<Config>(&edited_content) {
+            match serde_yaml::from_str::<TempConfig>(&edited_content) {
                 Ok(new_config) => {
-                    self.config.clusters.extend(new_config.clusters);
-                    self.config.users.extend(new_config.users);
-                    self.config.contexts.extend(new_config.contexts);
+                    // Check for duplicate names
+                    if self
+                        .config
+                        .clusters
+                        .iter()
+                        .any(|c| c.name == new_config.cluster.name)
+                    {
+                        eprintln!(
+                            "Error: Cluster '{}' already exists",
+                            new_config.cluster.name
+                        );
+                        return Ok(());
+                    }
+
+                    if let Some(ref context) = new_config.context {
+                        if self.config.contexts.iter().any(|c| c.name == context.name) {
+                            eprintln!("Error: Context '{}' already exists", context.name);
+                            return Ok(());
+                        }
+                    }
+
+                    if let Some(ref user) = new_config.user {
+                        if self.config.users.iter().any(|u| u.name == user.name) {
+                            eprintln!("Error: User '{}' already exists", user.name);
+                            return Ok(());
+                        }
+                    }
+
+                    // Add the new entries
+                    self.config.clusters.push(new_config.cluster);
+
+                    if let Some(context) = new_config.context {
+                        self.config.contexts.push(context);
+                    }
+
+                    if let Some(user) = new_config.user {
+                        self.config.users.push(user);
+                    }
 
                     let updated_config = Config {
                         clusters: self.config.clusters.clone(),
@@ -254,6 +349,8 @@ impl App {
                     let yaml_content = serde_yaml::to_string(&updated_config)
                         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
                     std::fs::write(&self.kubeconfig_path, yaml_content)?;
+
+                    println!("Successfully added new kubeconfig entry!");
                 }
                 Err(e) => eprintln!("Failed to parse new kubeconfig: {}", e),
             }

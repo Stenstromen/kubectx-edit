@@ -9,12 +9,13 @@ pub fn handle_input(app: &mut App) -> io::Result<bool> {
                 KeyCode::Char('q') => return Ok(true),
                 KeyCode::Char('a') => app.add_new_kubeconfig()?,
                 KeyCode::Char('d') => app.delete_selected(),
-                KeyCode::Down => app.next(),
-                KeyCode::Up => app.previous(),
+                KeyCode::Char('e') => app.edit_selected()?,
                 KeyCode::Enter => {
                     app.select();
                     app.edit_selected()?;
                 }
+                KeyCode::Down => app.next(),
+                KeyCode::Up => app.previous(),
                 _ => {}
             }
         }
