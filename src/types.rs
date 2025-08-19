@@ -21,7 +21,10 @@ pub struct Cluster {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClusterDetails {
     pub server: String,
-    #[serde(rename = "certificate-authority-data", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "certificate-authority-data",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub certificate_authority_data: Option<String>,
 }
 
