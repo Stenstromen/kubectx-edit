@@ -10,6 +10,7 @@ pub fn handle_input(app: &mut App) -> io::Result<bool> {
                 KeyCode::Char('a') => app.add_new_kubeconfig()?,
                 KeyCode::Char('d') => app.delete_selected(),
                 KeyCode::Char('e') => app.edit_selected()?,
+                KeyCode::Char('r') => app.rotate_credentials()?,
                 KeyCode::Enter => {
                     app.select();
                     app.edit_selected()?;
