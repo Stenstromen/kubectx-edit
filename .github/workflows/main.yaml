@@ -37,6 +37,9 @@ jobs:
           rustup install stable
           rustup target add ${{ matrix.target }}
 
+      - name: Run cargo test
+        run: cargo test
+
       - name: Install ARM64 Linux cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
@@ -82,7 +85,6 @@ jobs:
           name: kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt
           path: kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt
 
-
   upload-release-assets:
     needs: [build, checksum]
     runs-on: ubuntu-latest
@@ -92,13 +94,13 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           path: ./artifacts
-      
+
       - name: Get release
         id: get_release
         uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
