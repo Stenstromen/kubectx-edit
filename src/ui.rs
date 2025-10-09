@@ -7,19 +7,28 @@ use ratatui::{
 };
 
 pub fn draw(f: &mut Frame, app: &mut App) {
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
+    const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+    
     let clusters_count = app.config.clusters.len() as u16;
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Length(1),
                 Constraint::Min(0),
+                Constraint::Length(1),
                 Constraint::Length(clusters_count + 2),
                 Constraint::Length(1),
             ]
             .as_ref(),
         )
         .split(f.area());
+
+    // Display package name and version above the selection box
+    let title = Paragraph::new(format!("🚀 {} v{}", PKG_NAME, VERSION))
+        .style(Style::default().fg(Color::Cyan))
+        .alignment(Alignment::Center);
+    f.render_widget(title, chunks[1]);
 
     let items: Vec<ListItem> = app
         .config

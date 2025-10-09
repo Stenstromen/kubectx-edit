@@ -1,9 +1,9 @@
 [package]
 name = "kubectx-edit"
-version = "0.0.3"
+version = "0.0.5"
 edition = "2024"
 readme = "README.md"
-rust-version = "1.86.0"
+rust-version = "1.90.0"
 homepage = "https://github.com/stenstromen/kubectx-edit"
 repository = "https://github.com/stenstromen/kubectx-edit"
 description = "Small software utility to efficiently manage multiple kubeconfig contexts"

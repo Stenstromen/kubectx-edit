@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   build:
+    name: Build
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -67,6 +68,7 @@ jobs:
 
   checksum:
     needs: build
+    name: Checksum
     runs-on: ubuntu-latest
     env:
       VERSIONTAG: ${{ github.event.release.tag_name }}
@@ -90,6 +92,7 @@ jobs:
 
   upload-release-assets:
     needs: [build, checksum]
+    name: Upload Release Assets
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -119,6 +122,7 @@ jobs:
 
   homebrew-tap:
     needs: [build, checksum, upload-release-assets]
+    name: Homebrew Tap
     runs-on: ubuntu-latest
     env:
       VERSIONTAG: ${{ github.event.release.tag_name }}

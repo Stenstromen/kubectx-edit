@@ -41,6 +41,7 @@ impl App {
             None => 0,
         };
         self.cluster_list_state.select(Some(i));
+        self.selected_cluster = Some(self.config.clusters[i].clone());
     }
 
     pub fn previous(&mut self) {
@@ -49,6 +50,7 @@ impl App {
             None => 0,
         };
         self.cluster_list_state.select(Some(i));
+        self.selected_cluster = Some(self.config.clusters[i].clone());
     }
 
     pub fn select(&mut self) {
@@ -578,19 +580,26 @@ mod tests {
         let kubeconfig_path = temp_dir.path().join("config");
         let mut app = App::new(config, kubeconfig_path);
 
+        // Initially selected cluster should be the first one
+        assert_eq!(app.selected_cluster.as_ref().unwrap().name, "test-cluster");
+
         // Test next
         app.next();
         assert_eq!(app.cluster_list_state.selected(), Some(1));
+        assert_eq!(app.selected_cluster.as_ref().unwrap().name, "test-cluster-2");
 
         app.next();
         assert_eq!(app.cluster_list_state.selected(), Some(0)); // Wraps around
+        assert_eq!(app.selected_cluster.as_ref().unwrap().name, "test-cluster");
 
         // Test previous
         app.previous();
         assert_eq!(app.cluster_list_state.selected(), Some(1));
+        assert_eq!(app.selected_cluster.as_ref().unwrap().name, "test-cluster-2");
 
         app.previous();
         assert_eq!(app.cluster_list_state.selected(), Some(0));
+        assert_eq!(app.selected_cluster.as_ref().unwrap().name, "test-cluster");
     }
 
     #[test]
@@ -754,6 +763,282 @@ mod tests {
         match deserialized.user.user.auth {
             UserAuth::Token { token } => assert_eq!(token, "rotated-token"),
             _ => panic!("Expected token auth"),
+        }
+    }
+
+    #[test]
+    fn test_rotate_template_generation_token() {
+        let user = User {
+            name: "test-user".to_string(),
+            user: UserDetails {
+                auth: UserAuth::Token {
+                    token: "token-xyz789:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+                },
+            },
+        };
+
+        let cluster_name = "test-cluster";
+        
+        let template = format!(
+            r#"# Rotate credentials for cluster: {}
+# Update the authentication details below:
+
+user:
+  name: "{}"
+  user:
+{}
+"#,
+            cluster_name,
+            user.name,
+            match &user.user.auth {
+                UserAuth::Token { token } => {
+                    format!("    token: \"{}\"", token)
+                }
+                UserAuth::Certificate {
+                    client_certificate_data,
+                    client_key_data,
+                } => {
+                    format!(
+                        "    client-certificate-data: \"{}\"\n    client-key-data: \"{}\"",
+                        client_certificate_data, client_key_data
+                    )
+                }
+            }
+        );
+
+        println!("Template:\n{}", template);
+
+        // Try to parse it back
+        #[derive(serde::Deserialize)]
+        struct RotateConfig {
+            user: User,
+        }
+
+        let parsed: Result<RotateConfig, _> = serde_yaml::from_str(&template);
+        match parsed {
+            Ok(config) => {
+                println!("Successfully parsed!");
+                match config.user.user.auth {
+                    UserAuth::Token { token } => println!("Token: {}", token),
+                    _ => println!("Not a token"),
+                }
+            }
+            Err(e) => {
+                println!("Failed to parse: {}", e);
+                panic!("Template parsing failed");
+            }
+        }
+    }
+
+    #[test]
+    fn test_multiple_token_users() {
+        // Create a config with multiple token users to test mixed auth types
+        let config = Config {
+            clusters: vec![
+                Cluster {
+                    name: "dev-cluster".to_string(),
+                    cluster: ClusterDetails {
+                        server: "https://dev.example.com:6443".to_string(),
+                        certificate_authority_data: None,
+                    },
+                },
+                Cluster {
+                    name: "prod-cluster".to_string(),
+                    cluster: ClusterDetails {
+                        server: "https://prod.example.com:6443".to_string(),
+                        certificate_authority_data: None,
+                    },
+                },
+                Cluster {
+                    name: "staging-cluster".to_string(),
+                    cluster: ClusterDetails {
+                        server: "https://staging.example.com:6443".to_string(),
+                        certificate_authority_data: Some("LS0tLS1CRUdJTi1DRVJUSUZJQ0FURS0tLS0t...".to_string()),
+                    },
+                },
+            ],
+            contexts: vec![
+                Context {
+                    name: "dev-cluster".to_string(),
+                    context: ContextDetails {
+                        cluster: "dev-cluster".to_string(),
+                        user: "dev-user".to_string(),
+                    },
+                },
+                Context {
+                    name: "prod-cluster".to_string(),
+                    context: ContextDetails {
+                        cluster: "prod-cluster".to_string(),
+                        user: "prod-user".to_string(),
+                    },
+                },
+                Context {
+                    name: "staging-cluster".to_string(),
+                    context: ContextDetails {
+                        cluster: "staging-cluster".to_string(),
+                        user: "staging-user".to_string(),
+                    },
+                },
+            ],
+            users: vec![
+                User {
+                    name: "dev-user".to_string(),
+                    user: UserDetails {
+                        auth: UserAuth::Token {
+                            token: "token-abc123:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx".to_string(),
+                        },
+                    },
+                },
+                User {
+                    name: "prod-user".to_string(),
+                    user: UserDetails {
+                        auth: UserAuth::Token {
+                            token: "token-def456:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy".to_string(),
+                        },
+                    },
+                },
+                User {
+                    name: "staging-user".to_string(),
+                    user: UserDetails {
+                        auth: UserAuth::Certificate {
+                            client_certificate_data: "LS0tLS1CRUdJTi1DRVJUSUZJQ0FURS0tLS0t...cert".to_string(),
+                            client_key_data: "LS0tLS1CRUdJTi1FQyBQUklWQVRFIEtFWS0tLS0t...key".to_string(),
+                        },
+                    },
+                },
+            ],
+            current_context: Some("prod-cluster".to_string()),
+            preferences: None,
+        };
+
+        // Test finding users for each cluster
+        for cluster in &config.clusters {
+            println!("\n=== Testing cluster: {} ===", cluster.name);
+            
+            let context = config
+                .contexts
+                .iter()
+                .find(|c| c.context.cluster == cluster.name)
+                .cloned();
+            
+            if let Some(ctx) = &context {
+                println!("Found context: {}, user reference: {}", ctx.name, ctx.context.user);
+            }
+
+            let user = context
+                .as_ref()
+                .and_then(|c| {
+                    config
+                        .users
+                        .iter()
+                        .find(|u| &u.name == &c.context.user)
+                })
+                .cloned();
+
+            if let Some(u) = &user {
+                println!("Found user: {}", u.name);
+                match &u.user.auth {
+                    UserAuth::Token { token } => println!("  Token: {}...", &token[..20]),
+                    UserAuth::Certificate { .. } => println!("  Auth: Certificate"),
+                }
+            } else {
+                println!("ERROR: User not found!");
+            }
+        }
+    }
+
+    #[test]
+    fn test_rotate_credentials_after_navigation() {
+        // This test reproduces the bug where rotate_credentials would show
+        // credentials for the wrong cluster if you navigated with arrow keys
+        let config = Config {
+            clusters: vec![
+                Cluster {
+                    name: "cluster-1".to_string(),
+                    cluster: ClusterDetails {
+                        server: "https://server1:6443".to_string(),
+                        certificate_authority_data: None,
+                    },
+                },
+                Cluster {
+                    name: "cluster-2".to_string(),
+                    cluster: ClusterDetails {
+                        server: "https://server2:6443".to_string(),
+                        certificate_authority_data: None,
+                    },
+                },
+            ],
+            contexts: vec![
+                Context {
+                    name: "context-1".to_string(),
+                    context: ContextDetails {
+                        cluster: "cluster-1".to_string(),
+                        user: "user-1".to_string(),
+                    },
+                },
+                Context {
+                    name: "context-2".to_string(),
+                    context: ContextDetails {
+                        cluster: "cluster-2".to_string(),
+                        user: "user-2".to_string(),
+                    },
+                },
+            ],
+            users: vec![
+                User {
+                    name: "user-1".to_string(),
+                    user: UserDetails {
+                        auth: UserAuth::Token {
+                            token: "token-for-user-1".to_string(),
+                        },
+                    },
+                },
+                User {
+                    name: "user-2".to_string(),
+                    user: UserDetails {
+                        auth: UserAuth::Token {
+                            token: "token-for-user-2".to_string(),
+                        },
+                    },
+                },
+            ],
+            current_context: Some("context-1".to_string()),
+            preferences: None,
+        };
+
+        let temp_dir = TempDir::new().unwrap();
+        let kubeconfig_path = temp_dir.path().join("config");
+        let mut app = App::new(config, kubeconfig_path);
+
+        // Initially on cluster-1
+        assert_eq!(app.selected_cluster.as_ref().unwrap().name, "cluster-1");
+        
+        // Get the user for cluster-1 
+        let context1 = app.config.contexts.iter()
+            .find(|c| c.context.cluster == "cluster-1").unwrap();
+        let user1 = app.config.users.iter()
+            .find(|u| u.name == context1.context.user).unwrap();
+        match &user1.user.auth {
+            UserAuth::Token { token } => assert_eq!(token, "token-for-user-1"),
+            _ => panic!("Expected token"),
+        }
+
+        // Navigate to cluster-2
+        app.next();
+        assert_eq!(app.selected_cluster.as_ref().unwrap().name, "cluster-2");
+        
+        // Now the selected_cluster should be cluster-2
+        // And if we were to call rotate_credentials, it should show credentials for user-2
+        let context2 = app.config.contexts.iter()
+            .find(|c| c.context.cluster == app.selected_cluster.as_ref().unwrap().name).unwrap();
+        let user2 = app.config.users.iter()
+            .find(|u| u.name == context2.context.user).unwrap();
+        match &user2.user.auth {
+            UserAuth::Token { token } => {
+                assert_eq!(token, "token-for-user-2");
+                println!("✓ After navigation, selected_cluster correctly points to cluster-2 with token-for-user-2");
+            },
+            _ => panic!("Expected token"),
         }
     }
 
