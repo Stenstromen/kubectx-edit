@@ -36,6 +36,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Check and update Cargo.toml version if necessary
+        run: |
+          TAG_VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${TAG_VERSION#v}"
+          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+
+          if [ "$VERSION" != "$CARGO_VERSION" ]; then
+            echo "⚠️  Version mismatch detected! Updating Cargo.toml from $CARGO_VERSION to $VERSION"
+            sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+            rm Cargo.toml.bak 2>/dev/null || true
+            echo "✅ Cargo.toml updated successfully"
+          else
+            echo "✅ Versions match, no update needed"
+          fi
       - name: Set up Rust
         run: |
           rustup install stable
