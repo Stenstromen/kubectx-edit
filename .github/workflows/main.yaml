@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Check and update Cargo.toml version if necessary
         run: |
@@ -142,7 +142,7 @@ jobs:
       VERSIONTAG: ${{ github.event.release.tag_name }}
     steps:
       - name: Checkout homebrew-tap repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: stenstromen/homebrew-tap
           token: ${{ secrets.GO_RELEASER_GITHUB_TOKEN }}
