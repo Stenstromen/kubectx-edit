@@ -88,7 +88,7 @@ jobs:
       VERSIONTAG: ${{ github.event.release.tag_name }}
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: artifacts/
 
@@ -113,7 +113,7 @@ jobs:
       contents: write
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: ./artifacts
 
@@ -149,7 +149,7 @@ jobs:
           path: homebrew-tap
 
       - name: Download checksum file
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt
           path: .
