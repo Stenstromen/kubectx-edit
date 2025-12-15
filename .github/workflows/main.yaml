@@ -75,7 +75,7 @@ jobs:
           tar -czvf kubectx-edit_${{ matrix.name }}.tar.gz -C ./target/${{ matrix.target }}/release kubectx-edit
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: kubectx-edit_${{ matrix.name }}.tar.gz
           path: kubectx-edit_${{ matrix.name }}.tar.gz
@@ -99,7 +99,7 @@ jobs:
           done
 
       - name: Upload checksum file
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt
           path: kubectx-edit_${{ env.VERSIONTAG }}_checksums.txt
