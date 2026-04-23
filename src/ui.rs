@@ -1,4 +1,4 @@
-use crate::app::App;
+use crate::app::{App, HealthStatus};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout},
@@ -36,7 +36,14 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .config
         .clusters
         .iter()
-        .map(|cluster| ListItem::new(cluster.name.clone()))
+        .map(|cluster| {
+            let icon = match app.health_status.get(&cluster.name) {
+                Some(HealthStatus::Ok) => "✅",
+                Some(HealthStatus::Failed) => "❌",
+                None => "",
+            };
+            ListItem::new(format!("{}{}", icon, cluster.name))
+        })
         .collect();
 
     let list = List::new(items)

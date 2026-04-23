@@ -33,6 +33,10 @@ pub enum HealthOutcome {
 }
 
 impl HealthCheckReport {
+    pub fn is_healthy(&self) -> bool {
+        matches!(self.outcome, HealthOutcome::Healthy { .. })
+    }
+
     pub fn summary(&self) -> String {
         match &self.outcome {
             HealthOutcome::Healthy {

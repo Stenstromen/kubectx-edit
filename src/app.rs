@@ -6,8 +6,14 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::widgets::ListState;
-use std::{env, io, path::PathBuf, process::Command};
+use std::{collections::HashMap, env, io, path::PathBuf, process::Command};
 use tempfile::NamedTempFile;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HealthStatus {
+    Ok,
+    Failed,
+}
 
 pub struct App {
     pub config: Config,
@@ -16,6 +22,7 @@ pub struct App {
     pub needs_redraw: bool,
     pub kubeconfig_path: PathBuf,
     pub status_message: Option<String>,
+    pub health_status: HashMap<String, HealthStatus>,
 }
 
 impl App {
@@ -27,6 +34,7 @@ impl App {
             needs_redraw: false,
             kubeconfig_path,
             status_message: None,
+            health_status: HashMap::new(),
         };
 
         // Select first item if there are any clusters
@@ -490,7 +498,7 @@ user:
     }
 
     pub fn health_check(&mut self) {
-        let message = match &self.selected_cluster {
+        match self.selected_cluster.clone() {
             Some(cluster) => {
                 let user = self
                     .config
@@ -502,12 +510,30 @@ user:
                             .users
                             .iter()
                             .find(|u| u.name == ctx.context.user)
-                    });
-                health::check_cluster(cluster, user).summary()
+                    })
+                    .cloned();
+
+                let report = health::check_cluster(&cluster, user.as_ref());
+
+                let status = if report.is_healthy() {
+                    HealthStatus::Ok
+                } else {
+                    HealthStatus::Failed
+                };
+                self.health_status.insert(cluster.name.clone(), status);
+
+                // The icon in the list conveys the success case; only keep a
+                // status-bar message when there's something worth reading.
+                self.status_message = if report.is_healthy() {
+                    None
+                } else {
+                    Some(report.summary())
+                };
             }
-            None => "No cluster selected".to_string(),
-        };
-        self.status_message = Some(message);
+            None => {
+                self.status_message = Some("No cluster selected".to_string());
+            }
+        }
         self.needs_redraw = true;
     }
 
