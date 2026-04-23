@@ -11,6 +11,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     const PKG_NAME: &str = env!("CARGO_PKG_NAME");
     
     let clusters_count = app.config.clusters.len() as u16;
+    let status_height: u16 = if app.status_message.is_some() { 1 } else { 0 };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
@@ -18,6 +19,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
                 Constraint::Min(0),
                 Constraint::Length(1),
                 Constraint::Length(clusters_count + 2),
+                Constraint::Length(status_height),
                 Constraint::Length(1),
             ]
             .as_ref(),
@@ -43,10 +45,17 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     f.render_stateful_widget(list, chunks[2], &mut app.cluster_list_state);
 
+    if let Some(status) = &app.status_message {
+        let status_line = Paragraph::new(status.clone())
+            .style(Style::default().fg(Color::Yellow))
+            .alignment(Alignment::Center);
+        f.render_widget(status_line, chunks[3]);
+    }
+
     let help_message = Paragraph::new(
-        "Enter/E to Edit, A to Add, R to Rotate Credentials, D to Delete, Q to quit",
+        "Enter/E to Edit, A to Add, R to Rotate Credentials, H to Health Check, D to Delete, Q to quit",
     )
     .style(Style::default().fg(Color::Gray))
     .alignment(Alignment::Center);
-    f.render_widget(help_message, chunks[3]);
+    f.render_widget(help_message, chunks[4]);
 }

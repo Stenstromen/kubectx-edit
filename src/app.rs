@@ -1,4 +1,5 @@
 use crate::config;
+use crate::health;
 use crate::types::{Cluster, Config, TempConfig};
 use crossterm::{
     execute,
@@ -14,6 +15,7 @@ pub struct App {
     pub selected_cluster: Option<Cluster>,
     pub needs_redraw: bool,
     pub kubeconfig_path: PathBuf,
+    pub status_message: Option<String>,
 }
 
 impl App {
@@ -24,6 +26,7 @@ impl App {
             selected_cluster: None,
             needs_redraw: false,
             kubeconfig_path,
+            status_message: None,
         };
 
         // Select first item if there are any clusters
@@ -484,6 +487,28 @@ user:
         self.save_config().expect("Failed to save config");
         self.needs_redraw = true;
         Ok(())
+    }
+
+    pub fn health_check(&mut self) {
+        let message = match &self.selected_cluster {
+            Some(cluster) => {
+                let user = self
+                    .config
+                    .contexts
+                    .iter()
+                    .find(|c| c.context.cluster == cluster.name)
+                    .and_then(|ctx| {
+                        self.config
+                            .users
+                            .iter()
+                            .find(|u| u.name == ctx.context.user)
+                    });
+                health::check_cluster(cluster, user).summary()
+            }
+            None => "No cluster selected".to_string(),
+        };
+        self.status_message = Some(message);
+        self.needs_redraw = true;
     }
 
     pub fn save_config(&self) -> Result<(), Box<dyn std::error::Error>> {
