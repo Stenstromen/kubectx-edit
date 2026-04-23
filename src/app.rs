@@ -1,12 +1,19 @@
 use crate::config;
+use crate::health;
 use crate::types::{Cluster, Config, TempConfig};
 use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::widgets::ListState;
-use std::{env, io, path::PathBuf, process::Command};
+use std::{collections::HashMap, env, io, path::PathBuf, process::Command};
 use tempfile::NamedTempFile;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HealthStatus {
+    Ok,
+    Failed,
+}
 
 pub struct App {
     pub config: Config,
@@ -14,6 +21,8 @@ pub struct App {
     pub selected_cluster: Option<Cluster>,
     pub needs_redraw: bool,
     pub kubeconfig_path: PathBuf,
+    pub status_message: Option<String>,
+    pub health_status: HashMap<String, HealthStatus>,
 }
 
 impl App {
@@ -24,6 +33,8 @@ impl App {
             selected_cluster: None,
             needs_redraw: false,
             kubeconfig_path,
+            status_message: None,
+            health_status: HashMap::new(),
         };
 
         // Select first item if there are any clusters
@@ -484,6 +495,46 @@ user:
         self.save_config().expect("Failed to save config");
         self.needs_redraw = true;
         Ok(())
+    }
+
+    pub fn health_check(&mut self) {
+        match self.selected_cluster.clone() {
+            Some(cluster) => {
+                let user = self
+                    .config
+                    .contexts
+                    .iter()
+                    .find(|c| c.context.cluster == cluster.name)
+                    .and_then(|ctx| {
+                        self.config
+                            .users
+                            .iter()
+                            .find(|u| u.name == ctx.context.user)
+                    })
+                    .cloned();
+
+                let report = health::check_cluster(&cluster, user.as_ref());
+
+                let status = if report.is_healthy() {
+                    HealthStatus::Ok
+                } else {
+                    HealthStatus::Failed
+                };
+                self.health_status.insert(cluster.name.clone(), status);
+
+                // The icon in the list conveys the success case; only keep a
+                // status-bar message when there's something worth reading.
+                self.status_message = if report.is_healthy() {
+                    None
+                } else {
+                    Some(report.summary())
+                };
+            }
+            None => {
+                self.status_message = Some("No cluster selected".to_string());
+            }
+        }
+        self.needs_redraw = true;
     }
 
     pub fn save_config(&self) -> Result<(), Box<dyn std::error::Error>> {

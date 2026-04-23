@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod health;
 mod input;
 mod types;
 mod ui;
